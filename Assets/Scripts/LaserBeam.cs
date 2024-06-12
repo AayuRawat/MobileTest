@@ -6,11 +6,15 @@ public class LaserBeam : MonoBehaviour
 
     void Update()
     {
+        // Move the laser in a specified direction
         transform.Translate(Vector3.forward * speed * Time.deltaTime);
+    }
 
-        if (transform.position.magnitude > 50f) // Arbitrary distance to destroy laser
+    private void OnTriggerEnter(Collider other)
+    {
+        if (other.CompareTag("Player"))
         {
-            Destroy(gameObject);
+            UIManager.Instance.ShowLosePanel();
         }
     }
 }

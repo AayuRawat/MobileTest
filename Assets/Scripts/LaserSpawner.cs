@@ -1,15 +1,22 @@
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 
 public class LaserSpawner : MonoBehaviour
 {
     public GameObject laserPrefab;
-    public float spawnInterval = 2f;
-    private int currentWave = 1;
+    public Transform[] laserPositions; // Positions around the arena for lasers
+    public float minLaserActiveTime = 3f; // Minimum time lasers stay active
+    public float maxLaserActiveTime = 6f; // Maximum time lasers stay active
+    public float delayBetweenWaves = 2f; // Delay between waves
+    public float waveDuration = 5f; // Duration for each wave
     public int totalWaves = 5;
+
+    private int currentWave = 1;
 
     void Start()
     {
+        // Start the laser activation coroutine
         StartCoroutine(SpawnLasers());
     }
 
@@ -18,8 +25,10 @@ public class LaserSpawner : MonoBehaviour
         while (currentWave <= totalWaves)
         {
             // Start a new wave
-            StartCoroutine(SpawnLaserWave());
-            yield return new WaitForSeconds(spawnInterval * 10); // Adjust duration for each wave
+            yield return StartCoroutine(ActivateLaserWave());
+
+            // Wait for the interval before starting the next wave
+            yield return new WaitForSeconds(delayBetweenWaves);
 
             currentWave++;
         }
@@ -28,13 +37,47 @@ public class LaserSpawner : MonoBehaviour
         UIManager.Instance.ShowWinPanel();
     }
 
-    IEnumerator SpawnLaserWave()
+    IEnumerator ActivateLaserWave()
     {
-        for (int i = 0; i < currentWave * 5; i++) // Increase laser count with each wave
+        List<GameObject> spawnedLasers = new List<GameObject>();
+
+        foreach (Transform position in laserPositions)
         {
-            Vector3 spawnPosition = new Vector3(Random.Range(-10, 10), 1, Random.Range(-10, 10)); // Adjust for arena size
-            Instantiate(laserPrefab, spawnPosition, Quaternion.identity);
-            yield return new WaitForSeconds(spawnInterval / currentWave); // Increase speed by decreasing interval
+            StartCoroutine(ActivateLaserAtRandomTime(position, spawnedLasers));
+        }
+
+        // Wait for the wave duration
+        yield return new WaitForSeconds(waveDuration);
+
+        // Deactivate all lasers after the wave duration
+        foreach (GameObject laser in spawnedLasers)
+        {
+            if (laser != null)
+            {
+                Destroy(laser);
+            }
+        }
+    }
+
+    IEnumerator ActivateLaserAtRandomTime(Transform position, List<GameObject> spawnedLasers)
+    {
+        // Wait for a random time before activating the laser
+        float randomDelay = Random.Range(0, waveDuration - minLaserActiveTime);
+        yield return new WaitForSeconds(randomDelay);
+
+        // Instantiate and activate the laser
+        GameObject laser = Instantiate(laserPrefab, position.position, position.rotation);
+        laser.SetActive(true);
+        spawnedLasers.Add(laser);
+
+        // Wait for a random active time within the specified range
+        float activeTime = Random.Range(minLaserActiveTime, maxLaserActiveTime);
+        yield return new WaitForSeconds(activeTime);
+
+        // Deactivate the laser after it has been active
+        if (laser != null)
+        {
+            Destroy(laser);
         }
     }
 }

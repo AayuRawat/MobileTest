@@ -1,6 +1,5 @@
 using UnityEngine;
 using UnityEngine.UI;
-using System.Collections;
 
 public class CharacterLocomotion : MonoBehaviour
 {
@@ -8,9 +7,9 @@ public class CharacterLocomotion : MonoBehaviour
     [SerializeField] Animator animator;
     [Tooltip("Character controller is a built in component in unity. Feel free to use rigidbody or changing transform directly")]
     [SerializeField] CharacterController characterController;
-    [Tooltip("How fast the player walks")]
+    [Tooltip("how fast the player walks")]
     [SerializeField] float walkSpeed = 3f;
-    [Tooltip("If you would like separate visual from player assign something else here")]
+    [Tooltip("if you would like separate visual from player assign something else here")]
     [SerializeField] Transform characterVisual;
     [Tooltip("Turn this off if you want to separate movement and aiming")]
     [SerializeField] bool lookToMovementDirection = true;
@@ -18,15 +17,6 @@ public class CharacterLocomotion : MonoBehaviour
     [SerializeField] FixedJoystick moveJoystick;
     [Tooltip("Self explanatory. After this magnitude player will move ")]
     [SerializeField] float movementThreshold = 0.1f;
-    [Tooltip("Jump height for the character")]
-    [SerializeField] float jumpHeight = 2f;
-    [Tooltip("Gravity modifier for the character")]
-    [SerializeField] float gravity = -9.8f;
-
-    private float verticalSpeed = 0f;
-    private bool isGrounded = true;
-    private bool jumpRequest = false;
-
     [Header("Animation variables")]
     [Tooltip("This will turn rotation towards the joystick direction")]
     [SerializeField] bool canStrafe = false;
@@ -34,13 +24,22 @@ public class CharacterLocomotion : MonoBehaviour
     [SerializeField] string forwardAnimationVar = "Forward";
     [Tooltip("Animation variables for blendtrees")]
     [SerializeField] string strafeAnimationVar = "Strafe";
+    [Tooltip("Jump height")]
+    [SerializeField] float jumpHeight = 2f;
 
-    float mag;
-    Transform camTransform;
-    Vector3 fwd, right;
-    Vector3 input, move;
-    Vector3 cameraForward;
-    float forward, strafe;
+    // Reference to the jump button
+    [SerializeField] Button jumpButton;
+
+    private float mag;
+    private Transform camTransform;
+    private Vector3 fwd, right;
+    private Vector3 input, move;
+    private Vector3 cameraForward;
+    private float forward, strafe;
+    private bool isGrounded = true;
+    private Vector3 moveDirection;
+    private float gravity = -9.81f;
+    private float verticalVelocity;
 
     void Awake()
     {
@@ -59,6 +58,9 @@ public class CharacterLocomotion : MonoBehaviour
     {
         characterController.detectCollisions = false;
         RecalculateCamera(Camera.main);
+
+        // Assign the jump button listener
+        jumpButton.onClick.AddListener(OnJumpButtonPressed);
     }
 
     void Update()
@@ -68,14 +70,17 @@ public class CharacterLocomotion : MonoBehaviour
         {
             lookToMovementDirection = false;
         }
+
         if (mag >= movementThreshold)
         {
             MovementAndRotation();
         }
         else
         {
-            characterController.Move(new Vector3(0, verticalSpeed * Time.deltaTime, 0));
+            moveDirection = new Vector3(0, verticalVelocity, 0); // gravity when idle
+            characterController.Move(moveDirection * Time.deltaTime);
         }
+
         if (animator != null)
         {
             if (canStrafe)
@@ -88,16 +93,18 @@ public class CharacterLocomotion : MonoBehaviour
             }
         }
 
-        if (isGrounded && jumpRequest)
+        // Apply gravity
+        if (characterController.isGrounded)
         {
-            verticalSpeed = Mathf.Sqrt(2 * jumpHeight * -gravity);
-            isGrounded = false;
-            jumpRequest = false;
+            verticalVelocity = -0.5f; // Small negative value to keep the player grounded
         }
         else
         {
-            verticalSpeed += gravity * Time.deltaTime;
+            verticalVelocity += gravity * Time.deltaTime;
         }
+
+        moveDirection.y = verticalVelocity;
+        characterController.Move(moveDirection * Time.deltaTime);
     }
 
     void RelativeAnimations()
@@ -111,6 +118,7 @@ public class CharacterLocomotion : MonoBehaviour
         {
             move = moveJoystick.Vertical * Vector3.forward + moveJoystick.Horizontal * Vector3.right;
         }
+
         if (move.magnitude > 1)
         {
             move.Normalize();
@@ -144,21 +152,29 @@ public class CharacterLocomotion : MonoBehaviour
         Vector3 rightMovement = right * walkSpeed * Time.deltaTime * moveJoystick.Horizontal;
         Vector3 upMovement = fwd * walkSpeed * Time.deltaTime * moveJoystick.Vertical;
         Vector3 heading = Vector3.Normalize(rightMovement + upMovement);
-        heading.y = verticalSpeed * Time.deltaTime;
-        characterController.Move(heading * walkSpeed * Time.deltaTime);
+        heading.y = verticalVelocity;
+        moveDirection = heading * walkSpeed * Time.deltaTime;
+        characterController.Move(moveDirection);
+
         if (lookToMovementDirection)
         {
             characterVisual.forward = new Vector3(heading.x, characterVisual.forward.y, heading.z);
         }
-
-        isGrounded = characterController.isGrounded;
     }
 
-    public void OnJumpButtonPressed()
+    void OnJumpButtonPressed()
     {
-        if (isGrounded)
+        if (characterController.isGrounded)
         {
-            jumpRequest = true;
+            verticalVelocity = Mathf.Sqrt(jumpHeight * -2f * gravity);
+        }
+    }
+
+    void OnTriggerEnter(Collider other)
+    {
+        if (other.CompareTag("Laser"))
+        {
+            UIManager.Instance.ShowLosePanel();
         }
     }
 }
